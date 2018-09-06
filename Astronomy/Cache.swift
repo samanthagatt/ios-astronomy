@@ -10,20 +10,17 @@ import Foundation
 
 class Cache<Key, Value> where Key: Hashable {
     
+    private var queue = DispatchQueue(label: "com.SamanthaGatt.ios-astronomy.CacheSerialQueue")
     private var cachedItems: [Key: Value] = [:]
     
     subscript(_ key: Key) -> Value? {
         get {
-            return cachedItems[key] ?? nil
+            // waits for synchronous task to complete before going on to other tasks
+            return queue.sync { cachedItems[key] ?? nil }
         }
     }
     
     func cache(value: Value, for key: Key) {
-        cachedItems[key] = value
-    }
-    
-    func value(for key: Key) {
-        guard let index = cachedItems.index(forKey: key) else { return }
-        cachedItems.remove(at: index)
+        queue.async { self.cachedItems[key] = value }
     }
 }

@@ -65,25 +65,31 @@ class PhotosCollectionViewController: UIViewController, UICollectionViewDataSour
     private func loadImage(forCell cell: ImageCollectionViewCell, forItemAt indexPath: IndexPath) {
         
         let photoReference = photoReferences[indexPath.item]
-        guard let url = photoReference.imageURL.usingHTTPS else { return }
         
         if let image = cache[photoReference.id] {
             cell.imageView.image = image
             
         } else {
-            URLSession.shared.dataTask(with: url) { (data, _, error) in
-                if let error = error {
-                    NSLog("Error retrieving image from url: \(error)")
-                }
-                guard let data = data,
-                    let image = UIImage(data: data) else { return }
+            
+            let op1 = FetchPhotoOperation(photoRef: photoReference)
+            
+            let op2 = BlockOperation {
+                guard let image = op1.image else { return }
                 self.cache.cache(value: image, for: photoReference.id)
-                DispatchQueue.main.async {
-                    if indexPath == self.collectionView.indexPath(for: cell) {
-                        cell.imageView.image = image
-                    }
+            }
+            op2.addDependency(op1)
+            
+            let op3 = BlockOperation {
+                guard let image = op1.image else { return }
+                if indexPath == self.collectionView.indexPath(for: cell) {
+                    cell.imageView.image = image
                 }
-            }.resume()
+            }
+            op3.addDependency(op1)
+            
+            photoFetchQueue.addOperations([op1, op2], waitUntilFinished: false)
+            OperationQueue.main.addOperation(op3)
+            fetchRequests[photoReference.id] = op1
         }
     }
     
@@ -92,6 +98,8 @@ class PhotosCollectionViewController: UIViewController, UICollectionViewDataSour
     private let client = MarsRoverClient()
     
     private var cache: Cache<Int, UIImage> = Cache()
+    private var photoFetchQueue = OperationQueue()
+    private var fetchRequests: [Int: FetchPhotoOperation] = [:]
     
     private var roverInfo: MarsRover? {
         didSet {

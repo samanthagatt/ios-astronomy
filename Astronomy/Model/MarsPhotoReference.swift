@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import UIKit
 
 struct MarsPhotoReference: Codable {
     let id: Int
